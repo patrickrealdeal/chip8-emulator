@@ -85,7 +85,7 @@ pub fn buildTexture(system: *Chip8) void {
     while (y < 32) : (y += 1) {
         var x: usize = 0;
         while (x < 64) : (x += 1) {
-            bytes_c[y * 64 + x] = if (system.graphics[y * 64 + x] == 1) 0xFFFFFFFF else 0x000000FF;
+            bytes_c[y * 64 + x] = if (system.graphics[y * 64 + x] == 1) 0x3BD6C6FF else 0xB3ECECFF;
         }
     }
     c.SDL_UnlockTexture(texture);
@@ -93,26 +93,32 @@ pub fn buildTexture(system: *Chip8) void {
 
 pub fn main() !void {
     const slow_factor = 1;
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    //defer {
+    //     const deinit_status = gpa.deinit();
+    //fail test; can't try in defer as defer is executed after we return
+    //     if (deinit_status == .leak) @panic("TEST FAIL");
+    //}
 
-    const allocator = arena.allocator();
-
-    try init();
-    defer deinit();
+    const allocator = gpa.allocator();
 
     cpu = try allocator.create(Chip8);
     try cpu.init();
+    defer allocator.destroy(cpu);
 
     // Load  Rom
     var args = try process.argsWithAllocator(allocator);
+    defer args.deinit();
     _ = args.skip();
     const filename = args.next() orelse {
-        std.debug.print("No ROM given!\n", .{});
-        return;
+        std.debug.print("\rProvide a ROM for the CHIP8!\n", .{});
+        process.exit(1);
     };
 
     try loadRom(filename);
+
+    try init();
+    defer deinit();
 
     var open = true;
     while (open) {

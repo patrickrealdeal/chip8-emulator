@@ -50,6 +50,7 @@ pub fn init(self: *Self) !void {
     self.keys = std.mem.zeroes([16]u8);
     self.registers = std.mem.zeroes([16]u8);
 
+    // font space starts 0x50
     for (chip8_fontset, 0..) |c, i| {
         self.memory[i] = c; // loaded in cpu memory space
     }
@@ -83,82 +84,83 @@ pub fn cycle(self: *Self) !void {
                 self.incrementPc();
             }, // Unimplemented system instructions
             0x1 => { // Set program counter to nnn
-                self.program_counter = self.opcode & 0x0FFF; // Get the address we need to point to
-            },
-            // The interpreter increments the stack pointer, then puts the current PC on the top of the stack. The PC is then set to nnn.
+                const address = self.opcode & 0x0FFF;
+                self.program_counter = address;
+            }, // JP addr
             0x2 => {
+                const address = self.opcode & 0x0FFF;
                 self.stack[self.sp] = self.program_counter;
                 self.sp += 1;
-                self.program_counter = self.opcode & 0x0FFF;
+                self.program_counter = address;
             },
             0x3 => {
-                const x = (self.opcode & 0x0F00) >> 8; // shit it to least significant
-                if (self.registers[x] == self.opcode & 0x00FF) {
+                const Vx = (self.opcode & 0x0F00) >> 8; // shit it to least significant
+                if (self.registers[Vx] == self.opcode & 0x00FF) {
                     self.incrementPc();
                 }
                 self.incrementPc();
             },
             0x4 => {
-                const x = (self.opcode & 0x0F00) >> 8; // shit it to least significant
-                if (self.registers[x] != self.opcode & 0x00FF) {
+                const Vx = (self.opcode & 0x0F00) >> 8;
+                if (self.registers[Vx] != self.opcode & 0x00FF) {
                     self.incrementPc();
                 }
                 self.incrementPc();
             },
             0x5 => {
-                const x = (self.opcode & 0x0F00) >> 8; // shit it to least significant
-                const y = (self.opcode & 0x00F0) >> 4;
-                if (self.registers[x] == self.registers[y]) {
+                const Vx = (self.opcode & 0x0F00) >> 8;
+                const Vy = (self.opcode & 0x00F0) >> 4;
+                if (self.registers[Vx] == self.registers[Vy]) {
                     self.incrementPc();
                 }
                 self.incrementPc();
             },
             0x6 => {
-                const x = (self.opcode & 0x0F00) >> 8; // shit it to least significant
-                self.registers[x] = @truncate(self.opcode & 0x00FF); // ensures kk is loaded in registers
+                const Vx = (self.opcode & 0x0F00) >> 8;
+                self.registers[Vx] = @truncate(self.opcode & 0x00FF); // ensures kk is loaded in registers
                 self.incrementPc();
             },
             0x7 => {
                 @setRuntimeSafety(false);
-                const x = (self.opcode & 0x0F00) >> 8;
-                self.registers[x] += @truncate(self.opcode & 0x00FF);
+                const Vx = (self.opcode & 0x0F00) >> 8;
+                self.registers[Vx] += @truncate(self.opcode & 0x00FF);
                 self.incrementPc();
             },
             0x8 => {
-                const x = (self.opcode & 0x0F00) >> 8; // shit it to least significant
-                const y = (self.opcode & 0x00F0) >> 4;
+                const Vx = (self.opcode & 0x0F00) >> 8;
+                const Vy = (self.opcode & 0x00F0) >> 4;
                 const m = (self.opcode & 0x000F);
 
                 switch (m) {
-                    0 => self.registers[x] = self.registers[y],
-                    1 => self.registers[x] |= self.registers[y],
-                    2 => self.registers[x] &= self.registers[y],
-                    3 => self.registers[x] ^= self.registers[y], // xor
+                    0 => self.registers[Vx] = self.registers[Vy],
+                    1 => self.registers[Vx] |= self.registers[Vy],
+                    2 => self.registers[Vx] &= self.registers[Vy],
+                    3 => self.registers[Vx] ^= self.registers[Vy], // xor
                     4 => {
-                        @setRuntimeSafety(false);
-                        var sum: u16 = self.registers[x];
-                        sum += self.registers[y];
+                        // @setRuntimeSafety(false);
+                        var sum: u16 = self.registers[Vx];
+                        sum += self.registers[Vy];
 
-                        self.registers[0xF] = if (sum > 255) 1 else 0; // 0xF is the special flag register
-                        self.registers[x] = @truncate(sum & 0x00FF); // keep only lowest 8 bits
+                        self.registers[0xF] = if (sum > 255) 1 else 0; // Set flag to overflow (carry)
+                        self.registers[Vx] = @truncate(sum & 0x00FF); // keep only lowest 8 bits
                     },
                     5 => {
                         @setRuntimeSafety(false);
-                        self.registers[0xF] = if (self.registers[x] > self.registers[y]) 1 else 0;
-                        self.registers[x] -= self.registers[y];
+                        self.registers[0xF] = if (self.registers[Vx] > self.registers[Vy]) 1 else 0;
+                        self.registers[Vx] -= self.registers[Vy];
                     },
                     6 => {
-                        self.registers[0xF] = self.registers[x] * 0b00000001; // check least sig bit == 1
-                        self.registers[x] >>= 1; // division by 2
+                        self.registers[0xF] = (self.registers[Vx] & 0x1); // check least sig bit == 1
+                        self.registers[Vx] >>= 1; // division by 2
                     },
                     7 => {
                         @setRuntimeSafety(false);
-                        self.registers[0xF] = if (self.registers[y] > self.registers[x]) 1 else 0;
-                        self.registers[x] = self.registers[y] - self.registers[x];
+                        self.registers[0xF] = if (self.registers[Vy] > self.registers[Vx]) 1 else 0;
+                        self.registers[Vx] = self.registers[Vy] - self.registers[Vx];
                     },
                     0xE => {
-                        self.registers[0xF] = if (self.registers[x] & 0x80 != 0) 1 else 0; // check most sig bit is 1
-                        self.registers[x] <<= 1; // mult by 2
+                        self.registers[0xF] = if (self.registers[Vx] & 0x80 != 0) 1 else 0; // check most sig bit is 1
+                        self.registers[Vx] <<= 1; // mult by 2
                     },
                     else => {
                         std.debug.print("CURRENT ALU OP: {x}\n", .{self.opcode});
@@ -168,9 +170,9 @@ pub fn cycle(self: *Self) !void {
                 self.incrementPc();
             },
             0x9 => {
-                const x = (self.opcode & 0x0F00) >> 8; // shit it to least significant
-                const y = (self.opcode & 0x00F0) >> 4;
-                if (self.registers[x] != self.registers[y]) {
+                const Vx = (self.opcode & 0x0F00) >> 8;
+                const Vy = (self.opcode & 0x00F0) >> 4;
+                if (self.registers[Vx] != self.registers[Vy]) {
                     self.incrementPc();
                 }
                 self.incrementPc();
@@ -185,21 +187,21 @@ pub fn cycle(self: *Self) !void {
                 self.program_counter = (self.opcode & 0x0FFF) + v0;
             },
             0xC => {
-                const x = (self.opcode & 0x0F00) >> 8;
+                const Vx = (self.opcode & 0x0F00) >> 8;
                 const kk = self.opcode & 0x00FF;
-                self.registers[x] = @as(u8, @truncate(@as(u32, @bitCast(cstd.rand())) & kk));
+                self.registers[Vx] = @as(u8, @truncate(@as(u32, @bitCast(cstd.rand())) & kk));
                 self.incrementPc();
             },
             0xD => {
                 self.registers[0xF] = 0;
-                const xx = (self.opcode & 0x0F00) >> 8;
-                const yy = (self.opcode & 0x00F0) >> 4;
-                const nn = (self.opcode & 0x000F);
-                const regx = self.registers[xx];
-                const regy = self.registers[yy];
+                const Vx = (self.opcode & 0x0F00) >> 8;
+                const Vy = (self.opcode & 0x00F0) >> 4;
+                const height = (self.opcode & 0x000F);
+                const regx = self.registers[Vx];
+                const regy = self.registers[Vy];
 
                 var y: usize = 0;
-                while (y < nn) : (y += 1) {
+                while (y < height) : (y += 1) {
                     const pixel = self.memory[self.index + y];
                     var x: usize = 0;
                     while (x < 8) : (x += 1) {
@@ -222,15 +224,15 @@ pub fn cycle(self: *Self) !void {
                 self.incrementPc();
             },
             0xE => {
-                const x = (self.opcode & 0x0F00) >> 8;
+                const Vx = (self.opcode & 0x0F00) >> 8;
                 const kk = self.opcode & 0x00FF;
 
                 if (kk == 0x9E) {
-                    if (self.keys[self.registers[x]] == 1) { // pressed
+                    if (self.keys[self.registers[Vx]] == 1) { // pressed
                         self.incrementPc();
                     }
                 } else if (kk == 0xA1) {
-                    if (self.keys[self.registers[x]] != 1) { // not pressed
+                    if (self.keys[self.registers[Vx]] != 1) { // not pressed
                         self.incrementPc();
                     }
                 }
@@ -238,16 +240,16 @@ pub fn cycle(self: *Self) !void {
                 self.incrementPc();
             },
             0xF => {
-                const x = (self.opcode & 0x0F00) >> 8;
+                const Vx = (self.opcode & 0x0F00) >> 8;
                 const kk = self.opcode & 0x00FF;
 
                 if (kk == 0x07) {
-                    self.registers[x] = self.delay_timer;
+                    self.registers[Vx] = self.delay_timer;
                 } else if (kk == 0x0A) {
                     var key_pressed = false;
                     for (self.keys, 0..) |k, i| {
                         if (k != 0) {
-                            self.registers[x] = @truncate(i);
+                            self.registers[Vx] = @truncate(i);
                             key_pressed = true;
                         }
                     }
@@ -256,28 +258,28 @@ pub fn cycle(self: *Self) !void {
                         return;
                     }
                 } else if (kk == 0x15) {
-                    self.delay_timer = self.registers[x];
+                    self.delay_timer = self.registers[Vx];
                 } else if (kk == 0x18) {
-                    self.sound_timer = self.registers[x];
+                    self.sound_timer = self.registers[Vx];
                 } else if (kk == 0x1E) {
-                    self.registers[0xF] = if (self.index + self.registers[x] > 0xFFF) 1 else 0;
-                    self.index += self.registers[x];
+                    self.registers[0xF] = if (self.index + self.registers[Vx] > 0xFFF) 1 else 0;
+                    self.index += self.registers[Vx];
                 } else if (kk == 0x29) {
-                    if (self.registers[x] < 16) {
-                        self.index = self.registers[x] * 0x5;
+                    if (self.registers[Vx] < 16) {
+                        self.index = self.registers[Vx] * 0x5;
                     }
                 } else if (kk == 0x33) {
-                    self.memory[self.index] = self.registers[x] / 100;
-                    self.memory[self.index + 1] = (self.registers[x] / 10) % 10;
-                    self.memory[self.index + 2] = self.registers[x] % 10;
+                    self.memory[self.index] = self.registers[Vx] / 100;
+                    self.memory[self.index + 1] = (self.registers[Vx] / 10) % 10;
+                    self.memory[self.index + 2] = self.registers[Vx] % 10;
                 } else if (kk == 0x55) {
                     var i: usize = 0;
-                    while (i <= x) : (i += 1) {
+                    while (i <= Vx) : (i += 1) {
                         self.memory[self.index + i] = self.registers[i]; // dump registers into memory
                     }
                 } else if (kk == 0x65) {
                     var i: usize = 0;
-                    while (i <= x) : (i += 1) {
+                    while (i <= Vx) : (i += 1) {
                         self.registers[i] = self.memory[self.index + i];
                     }
                 }
