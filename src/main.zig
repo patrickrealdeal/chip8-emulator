@@ -94,11 +94,7 @@ pub fn buildTexture(system: *Chip8) void {
 pub fn main() !void {
     const slow_factor = 1;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    //defer {
-    //     const deinit_status = gpa.deinit();
-    //fail test; can't try in defer as defer is executed after we return
-    //     if (deinit_status == .leak) @panic("TEST FAIL");
-    //}
+    defer std.debug.assert(gpa.deinit() == .ok);
 
     const allocator = gpa.allocator();
 
@@ -152,6 +148,7 @@ pub fn main() !void {
                 else => {},
             }
         }
+
         // Rendering
         _ = c.SDL_RenderClear(renderer);
 
@@ -163,6 +160,6 @@ pub fn main() !void {
         _ = c.SDL_RenderCopy(renderer, texture, null, &dest);
         _ = c.SDL_RenderPresent(renderer);
 
-        std.time.sleep(12 * 1000 * 1000 * slow_factor); // 60 hz
+        std.time.sleep(16 * 1000 * 1000 * slow_factor); // 60 hz
     }
 }

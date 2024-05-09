@@ -62,7 +62,7 @@ fn incrementPc(self: *Self) void {
 
 pub fn cycle(self: *Self) !void {
     if (self.program_counter > 0xFFF)
-        @panic("OPcode out of range! Your program has an error!");
+        @panic("OPcode out of range!");
 
     self.opcode = @as(u16, @intCast(self.memory[self.program_counter])) << 8 | self.memory[self.program_counter + 1];
 
@@ -83,30 +83,30 @@ pub fn cycle(self: *Self) !void {
                 std.debug.print("SYS INSTR!\n", .{});
                 self.incrementPc();
             }, // Unimplemented system instructions
-            0x1 => { // Set program counter to nnn
+            0x1 => {
                 const address = self.opcode & 0x0FFF;
                 self.program_counter = address;
-            }, // JP addr
+            }, // Jump to location nnn
             0x2 => {
                 const address = self.opcode & 0x0FFF;
                 self.stack[self.sp] = self.program_counter;
                 self.sp += 1;
                 self.program_counter = address;
-            },
+            }, // Call subroutine at nnn.
             0x3 => {
                 const Vx = (self.opcode & 0x0F00) >> 8; // shit it to least significant
                 if (self.registers[Vx] == self.opcode & 0x00FF) {
                     self.incrementPc();
                 }
                 self.incrementPc();
-            },
+            }, // Skip next instruction if Vx = kk.
             0x4 => {
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 if (self.registers[Vx] != self.opcode & 0x00FF) {
                     self.incrementPc();
                 }
                 self.incrementPc();
-            },
+            }, // Skip next instruction if Vx != kk.
             0x5 => {
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 const Vy = (self.opcode & 0x00F0) >> 4;
@@ -114,18 +114,18 @@ pub fn cycle(self: *Self) !void {
                     self.incrementPc();
                 }
                 self.incrementPc();
-            },
+            }, // Skip next instruction if Vx = Vy.
             0x6 => {
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 self.registers[Vx] = @truncate(self.opcode & 0x00FF); // ensures kk is loaded in registers
                 self.incrementPc();
-            },
+            }, // Set Vx = kk.
             0x7 => {
                 @setRuntimeSafety(false);
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 self.registers[Vx] += @truncate(self.opcode & 0x00FF);
                 self.incrementPc();
-            },
+            }, // Set Vx = Vx + kk.
             0x8 => {
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 const Vy = (self.opcode & 0x00F0) >> 4;
@@ -143,25 +143,25 @@ pub fn cycle(self: *Self) !void {
 
                         self.registers[0xF] = if (sum > 255) 1 else 0; // Set flag to overflow (carry)
                         self.registers[Vx] = @truncate(sum & 0x00FF); // keep only lowest 8 bits
-                    },
+                    }, // Set Vx = Vx + Vy, set VF = carry.
                     5 => {
-                        @setRuntimeSafety(false);
+                        // @setRuntimeSafety(false);
                         self.registers[0xF] = if (self.registers[Vx] > self.registers[Vy]) 1 else 0;
                         self.registers[Vx] -= self.registers[Vy];
-                    },
+                    }, // Set Vx = Vx - Vy, set VF = NOT borrow.
                     6 => {
                         self.registers[0xF] = (self.registers[Vx] & 0x1); // check least sig bit == 1
                         self.registers[Vx] >>= 1; // division by 2
-                    },
+                    }, // Set Vx = Vx SHR 1.
                     7 => {
-                        @setRuntimeSafety(false);
+                        // @setRuntimeSafety(false);
                         self.registers[0xF] = if (self.registers[Vy] > self.registers[Vx]) 1 else 0;
                         self.registers[Vx] = self.registers[Vy] - self.registers[Vx];
-                    },
+                    }, // Set Vx = Vy - Vx, set VF = NOT borrow.
                     0xE => {
                         self.registers[0xF] = if (self.registers[Vx] & 0x80 != 0) 1 else 0; // check most sig bit is 1
                         self.registers[Vx] <<= 1; // mult by 2
-                    },
+                    }, // Set Vx = Vx SHL 1.
                     else => {
                         std.debug.print("CURRENT ALU OP: {x}\n", .{self.opcode});
                     },
@@ -176,22 +176,22 @@ pub fn cycle(self: *Self) !void {
                     self.incrementPc();
                 }
                 self.incrementPc();
-            },
+            }, // Skip next instruction if Vx != Vy.
 
             0xA => {
                 self.index = self.opcode & 0x0FFF;
                 self.incrementPc();
-            },
+            }, // Set I = nnn.
             0xB => {
                 const v0: u16 = @intCast(self.registers[0]);
                 self.program_counter = (self.opcode & 0x0FFF) + v0;
-            },
+            }, // Jump to location nnn + V0.
             0xC => {
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 const kk = self.opcode & 0x00FF;
                 self.registers[Vx] = @as(u8, @truncate(@as(u32, @bitCast(cstd.rand())) & kk));
                 self.incrementPc();
-            },
+            }, // Set Vx = random byte AND kk.
             0xD => {
                 self.registers[0xF] = 0;
                 const Vx = (self.opcode & 0x0F00) >> 8;
@@ -222,7 +222,7 @@ pub fn cycle(self: *Self) !void {
                     }
                 }
                 self.incrementPc();
-            },
+            }, // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
             0xE => {
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 const kk = self.opcode & 0x00FF;
@@ -238,7 +238,7 @@ pub fn cycle(self: *Self) !void {
                 }
 
                 self.incrementPc();
-            },
+            }, // Skip next instruction if key with the value of Vx is pressed.
             0xF => {
                 const Vx = (self.opcode & 0x0F00) >> 8;
                 const kk = self.opcode & 0x00FF;
