@@ -51,7 +51,7 @@ pub fn init(self: *Self) !void {
     self.registers = std.mem.zeroes([16]u8);
 
     // font space starts 0x50
-    for (chip8_fontset, 0..) |c, i| {
+    for (chip8_fontset, 0x50..) |c, i| {
         self.memory[i] = c; // loaded in cpu memory space
     }
 }
@@ -266,7 +266,7 @@ pub fn cycle(self: *Self) !void {
                     self.index += self.registers[Vx];
                 } else if (kk == 0x29) {
                     if (self.registers[Vx] < 16) {
-                        self.index = self.registers[Vx] * 0x5;
+                        self.index = 0x50 + (self.registers[Vx] * 0x5);
                     }
                 } else if (kk == 0x33) {
                     self.memory[self.index] = self.registers[Vx] / 100;
