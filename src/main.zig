@@ -116,50 +116,60 @@ pub fn main() !void {
     try init();
     defer deinit();
 
+    const fps: f32 = 60.0;
+    const fps_interval = 1000.0 / fps;
+    var previous_time = std.time.milliTimeStamp();
+    var current_time = std.time.milliTimeStamp();
+
     var open = true;
     while (open) {
         // Emulator cycle
-        try cpu.cycle();
+        current_time = std.time.milliTimeStamp();
+        if (@as(f32, @floatFromInt(current_time - previous_time)) > fps_interval) {
+            previous_time = current_time;
 
-        // Poll Events
-        var e: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&e) != 0) {
-            switch (e.type) {
-                c.SDL_QUIT => open = false,
-                c.SDL_KEYDOWN => {
-                    var i: usize = 0;
-                    while (i < 16) : (i += 1) {
-                        if (e.key.keysym.scancode == keymap[i]) {
-                            cpu.keys[i] = 1;
+            try cpu.cycle();
+
+            
+            // Rendering
+            _ = c.SDL_RenderClear(renderer);
+
+            // TODO: Build Texture
+            buildTexture(cpu);
+
+            var dest = c.SDL_Rect{ .x = 0, .y = 0, .w = 1024, .h = 512 };
+
+            _ = c.SDL_RenderCopy(renderer, texture, null, &dest);
+            _ = c.SDL_RenderPresent(renderer);
+
+            // Poll Events
+            var e: c.SDL_Event = undefined;
+            while (c.SDL_PollEvent(&e) != 0) {
+                switch (e.type) {
+                    c.SDL_QUIT => open = false,
+                    c.SDL_KEYDOWN => {
+                        var i: usize = 0;
+                        while (i < 16) : (i += 1) {
+                            if (e.key.keysym.scancode == keymap[i]) {
+                                cpu.keys[i] = 1;
+                            }
                         }
-                    }
-                    if (e.key.keysym.scancode == c.SDL_SCANCODE_ESCAPE) {
-                        open = false;
-                    }
-                },
-                c.SDL_KEYUP => {
-                    var i: usize = 0;
-                    while (i < 16) : (i += 1) {
-                        if (e.key.keysym.scancode == keymap[i]) {
-                            cpu.keys[i] = 0;
+                        if (e.key.keysym.scancode == c.SDL_SCANCODE_ESCAPE) {
+                            open = false;
                         }
-                    }
-                },
-                else => {},
+                    },
+                    c.SDL_KEYUP => {
+                        var i: usize = 0;
+                        while (i < 16) : (i += 1) {
+                            if (e.key.keysym.scancode == keymap[i]) {
+                                cpu.keys[i] = 0;
+                            }
+                        }
+                    },
+                    else => {},
+                }
             }
         }
-
-        // Rendering
-        _ = c.SDL_RenderClear(renderer);
-
-        // TODO: Build Texture
-        buildTexture(cpu);
-
-        var dest = c.SDL_Rect{ .x = 0, .y = 0, .w = 1024, .h = 512 };
-
-        _ = c.SDL_RenderCopy(renderer, texture, null, &dest);
-        _ = c.SDL_RenderPresent(renderer);
-
-        std.time.sleep(16 * 1000 * 1000 * slow_factor); // 60 hz
+        // std.time.sleep(16 * 1000 * 1000 * slow_factor); // 60 hz
     }
 }
