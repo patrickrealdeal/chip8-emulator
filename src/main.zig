@@ -29,7 +29,7 @@ const keymap: [16]c_int = [_]c_int{
 };
 
 pub fn init() !void {
-    if (c.SDL_Init(1) < 0) {
+    if (c.SDL_Init(1) < 0) { // SLD_VIDEO | SDL_AUDIO
         @panic("Failed to initialize SDL.");
     }
 
