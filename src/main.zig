@@ -7,6 +7,10 @@ var window: ?*c.SDL_Window = null;
 var renderer: ?*c.SDL_Renderer = null;
 var texture: ?*c.SDL_Texture = null;
 
+// FPS
+const fps: f32 = 60.0;
+const fps_interval = 1000.0 / fps;
+
 var cpu: *Chip8 = undefined;
 
 const keymap: [16]c_int = [_]c_int{
@@ -92,7 +96,6 @@ pub fn buildTexture(system: *Chip8) void {
 }
 
 pub fn main() !void {
-    const slow_factor = 1;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
@@ -116,21 +119,18 @@ pub fn main() !void {
     try init();
     defer deinit();
 
-    const fps: f32 = 60.0;
-    const fps_interval = 1000.0 / fps;
-    var previous_time = std.time.milliTimeStamp();
-    var current_time = std.time.milliTimeStamp();
+    var previous_time = std.time.milliTimestamp();
+    var current_time = std.time.milliTimestamp();
 
     var open = true;
     while (open) {
         // Emulator cycle
-        current_time = std.time.milliTimeStamp();
+        current_time = std.time.milliTimestamp();
         if (@as(f32, @floatFromInt(current_time - previous_time)) > fps_interval) {
             previous_time = current_time;
 
             try cpu.cycle();
 
-            
             // Rendering
             _ = c.SDL_RenderClear(renderer);
 
@@ -170,6 +170,5 @@ pub fn main() !void {
                 }
             }
         }
-        // std.time.sleep(16 * 1000 * 1000 * slow_factor); // 60 hz
     }
 }
