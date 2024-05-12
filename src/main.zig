@@ -11,6 +11,14 @@ var texture: ?*c.SDL_Texture = null;
 const fps: f32 = 60.0;
 const fps_interval = 1000.0 / fps;
 
+// AUDIO
+const frequency = 440; // Frequency of the beep sound
+var want: c.SDL_AudioSpec = undefined;
+var have: c.SDL_AudioSpec = undefined;
+var dev: c.SDL_AudioDeviceID = undefined;
+const volume = 3000;
+const sampleRate = 44100;
+
 var cpu: *Chip8 = undefined;
 
 const keymap: [16]c_int = [_]c_int{
@@ -32,8 +40,23 @@ const keymap: [16]c_int = [_]c_int{
     c.SDL_SCANCODE_V,
 };
 
+fn audio_callback(user_data: ?*anyopaque, stream: [*c]c.Uint8, len: c_int) callconv(.C) void {
+    _ = user_data;
+    var audio_data: [*c]i16 = @ptrCast(@alignCast(stream));
+    var running_sample_index: u32 = 0;
+    const square_wave_period = sampleRate / 440;
+    const half_square_wave_period = square_wave_period / 2;
+
+    var i: usize = 0;
+    while (i < @divExact(len, 2)) : (i += 1) {
+        running_sample_index += 1;
+        audio_data[i] = if ((running_sample_index / half_square_wave_period) % 2 == 0) volume else -volume;
+        std.debug.print("we are here in audio!!\n", .{});
+    }
+}
+
 pub fn init() !void {
-    if (c.SDL_Init(1) < 0) { // SLD_VIDEO | SDL_AUDIO
+    if (c.SDL_Init(1) < 0) {
         @panic("Failed to initialize SDL.");
     }
 
@@ -53,10 +76,39 @@ pub fn init() !void {
     if (texture == null) {
         @panic("Failed to create texture.");
     }
+
+    // AUDIO INIT
+    if (c.SDL_Init(c.SDL_INIT_AUDIO) != 0) {
+        @panic("Failed to initialize SDL.");
+    }
+
+    want = c.SDL_AudioSpec{
+        .freq = frequency,
+        .format = c.AUDIO_S16LSB,
+        .channels = 1,
+        .samples = 4096,
+        .callback = audio_callback,
+        .userdata = null,
+    };
+
+    dev = c.SDL_OpenAudioDevice(null, 0, &want, &have, c.SDL_AUDIO_ALLOW_ANY_CHANGE);
+    if (dev == 0) {
+        std.debug.print("Failed to open audio: {s}\n", .{c.SDL_GetError()});
+        std.process.exit(0);
+    }
+
+    if (want.channels != have.channels or want.format != have.format) {
+        std.debug.print("Could not get desired specs: {s}\n", .{c.SDL_GetError()});
+        std.process.exit(0);
+    }
+
+    std.debug.print("Audio device opened successfully!\n", .{});
 }
 
 pub fn deinit() void {
+    c.SDL_DestroyRenderer(renderer);
     c.SDL_DestroyWindow(window);
+    // c.SDL_CloseAudioDevice(dev);
     c.SDL_Quit();
 }
 
@@ -120,13 +172,14 @@ pub fn main() !void {
     defer deinit();
 
     var previous_time = std.time.milliTimestamp();
-    var current_time = std.time.milliTimestamp();
+    const cycle_delay = 10;
+    _ = fps_interval;
 
     var open = true;
     while (open) {
         // Emulator cycle
-        current_time = std.time.milliTimestamp();
-        if (@as(f32, @floatFromInt(current_time - previous_time)) > fps_interval) {
+        const current_time = std.time.milliTimestamp();
+        if (@as(f32, @floatFromInt(current_time - previous_time)) > cycle_delay) {
             previous_time = current_time;
 
             try cpu.cycle();
@@ -169,6 +222,18 @@ pub fn main() !void {
                     else => {},
                 }
             }
+
+            if (cpu.delay_timer > 0) {
+                cpu.delay_timer -= 1;
+            }
+            if (cpu.sound_timer > 0) {
+                cpu.sound_timer -= 1;
+                c.SDL_PauseAudioDevice(dev, 0);
+            } else {
+                c.SDL_PauseAudioDevice(dev, 1);
+            }
         }
+
+        std.time.sleep(20000);
     }
 }
