@@ -48,7 +48,8 @@ fn audio_callback(user_data: ?*anyopaque, stream: [*c]c.Uint8, len: c_int) callc
     const half_square_wave_period = square_wave_period / 2;
 
     var i: usize = 0;
-    while (i < @divExact(len, 2)) : (i += 1) {
+    const len1 = len;
+    while (i < @divExact(len1, 2)) : (i += 1) {
         running_sample_index += 1;
         audio_data[i] = if ((running_sample_index / half_square_wave_period) % 2 == 0) volume else -volume;
         std.debug.print("we are here in audio!!\n", .{});
@@ -78,31 +79,31 @@ pub fn init() !void {
     }
 
     // AUDIO INIT
-    if (c.SDL_Init(c.SDL_INIT_AUDIO) != 0) {
-        @panic("Failed to initialize SDL.");
-    }
+    // if (c.SDL_Init(c.SDL_INIT_AUDIO) != 0) {
+    //     @panic("Failed to initialize SDL.");
+    //}
 
-    want = c.SDL_AudioSpec{
-        .freq = frequency,
-        .format = c.AUDIO_S16LSB,
-        .channels = 1,
-        .samples = 4096,
-        .callback = audio_callback,
-        .userdata = null,
-    };
+    //want = c.SDL_AudioSpec{
+    //   .freq = frequency,
+    //   .format = c.AUDIO_F32LSB,
+    //    .channels = 1,
+    //    .samples = 4096,
+    //    .callback = audio_callback,
+    //    .userdata = null,
+    //};
 
-    dev = c.SDL_OpenAudioDevice(null, 0, &want, &have, c.SDL_AUDIO_ALLOW_ANY_CHANGE);
-    if (dev == 0) {
-        std.debug.print("Failed to open audio: {s}\n", .{c.SDL_GetError()});
-        std.process.exit(0);
-    }
+    //dev = c.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
+    //if (dev == 0) {
+    //    std.debug.print("Failed to open audio: {s}\n", .{c.SDL_GetError()});
+    //    std.process.exit(0);
+    //}
 
-    if (want.channels != have.channels or want.format != have.format) {
-        std.debug.print("Could not get desired specs: {s}\n", .{c.SDL_GetError()});
-        std.process.exit(0);
-    }
+    //if (want.channels != have.channels or want.format != have.format) {
+    //    std.debug.print("Could not get desired specs: {s}\n", .{c.SDL_GetError()});
+    //    std.process.exit(0);
+    //}
 
-    std.debug.print("Audio device opened successfully!\n", .{});
+    // std.debug.print("Audio device opened successfully!\n", .{});
 }
 
 pub fn deinit() void {
@@ -228,9 +229,9 @@ pub fn main() !void {
             }
             if (cpu.sound_timer > 0) {
                 cpu.sound_timer -= 1;
-                c.SDL_PauseAudioDevice(dev, 0);
+                // c.SDL_PauseAudioDevice(dev, 0);
             } else {
-                c.SDL_PauseAudioDevice(dev, 1);
+                // c.SDL_PauseAudioDevice(dev, 1);
             }
         }
 
