@@ -211,7 +211,6 @@ pub fn main() !void {
                 cpu.delay_timer -= 1;
             }
             if (cpu.sound_timer > 0) {
-                std.debug.print("ARE WE HERE??\n", .{});
                 _ = c.SDL_QueueAudio(dev, data.ptr, sampleRate * @sizeOf(f32));
                 c.SDL_PauseAudioDevice(dev, 0);
                 cpu.sound_timer -= 1;
