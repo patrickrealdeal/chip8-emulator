@@ -12,11 +12,11 @@ const fps: f32 = 60.0;
 const fps_interval = 1000.0 / fps;
 
 // AUDIO
+const frequency = 440; // Frequency of the beep sound
 var want: c.SDL_AudioSpec = undefined;
 var have: c.SDL_AudioSpec = undefined;
 var dev: c.SDL_AudioDeviceID = undefined;
-const amplitude = 0.5;
-const frequency = 440;
+const volume = 3000;
 const sampleRate = 44100;
 
 var cpu: *Chip8 = undefined;
@@ -39,6 +39,22 @@ const keymap: [16]c_int = [_]c_int{
     c.SDL_SCANCODE_F,
     c.SDL_SCANCODE_V,
 };
+
+fn audio_callback(user_data: ?*anyopaque, stream: [*c]c.Uint8, len: c_int) callconv(.C) void {
+    _ = user_data;
+    var audio_data: [*c]i16 = @ptrCast(@alignCast(stream));
+    var running_sample_index: u32 = 0;
+    const square_wave_period = sampleRate / 440;
+    const half_square_wave_period = square_wave_period / 2;
+
+    var i: usize = 0;
+    const len1 = len;
+    while (i < @divExact(len1, 2)) : (i += 1) {
+        running_sample_index += 1;
+        audio_data[i] = if ((running_sample_index / half_square_wave_period) % 2 == 0) volume else -volume;
+        std.debug.print("we are here in audio!!\n", .{});
+    }
+}
 
 pub fn init() !void {
     if (c.SDL_Init(1) < 0) {
@@ -63,30 +79,37 @@ pub fn init() !void {
     }
 
     // AUDIO INIT
-    if (c.SDL_Init(c.SDL_INIT_AUDIO) != 0) {
-        @panic("Failed to initialize SDL.");
-    }
+    // if (c.SDL_Init(c.SDL_INIT_AUDIO) != 0) {
+    //     @panic("Failed to initialize SDL.");
+    //}
 
-    const spec = c.SDL_AudioSpec{
-        .freq = sampleRate,
-        .format = c.AUDIO_F32SYS,
-        .channels = 1,
-        .samples = 1024,
-        .callback = null,
-        .userdata = null,
-    };
+    //want = c.SDL_AudioSpec{
+    //   .freq = frequency,
+    //   .format = c.AUDIO_F32LSB,
+    //    .channels = 1,
+    //    .samples = 4096,
+    //    .callback = audio_callback,
+    //    .userdata = null,
+    //};
 
-    dev = c.SDL_OpenAudioDevice(null, 0, &spec, null, 0);
-    if (dev == 0) {
-        std.debug.print("Failed to open audio: {s}\n", .{c.SDL_GetError()});
-        std.process.exit(0);
-    }
+    //dev = c.SDL_OpenAudioDevice(null, 0, &want, &have, 0);
+    //if (dev == 0) {
+    //    std.debug.print("Failed to open audio: {s}\n", .{c.SDL_GetError()});
+    //    std.process.exit(0);
+    //}
+
+    //if (want.channels != have.channels or want.format != have.format) {
+    //    std.debug.print("Could not get desired specs: {s}\n", .{c.SDL_GetError()});
+    //    std.process.exit(0);
+    //}
+
+    // std.debug.print("Audio device opened successfully!\n", .{});
 }
 
 pub fn deinit() void {
     c.SDL_DestroyRenderer(renderer);
     c.SDL_DestroyWindow(window);
-    c.SDL_CloseAudioDevice(dev);
+    // c.SDL_CloseAudioDevice(dev);
     c.SDL_Quit();
 }
 
@@ -153,14 +176,6 @@ pub fn main() !void {
     const cycle_delay = 10;
     _ = fps_interval;
 
-    // Generate samples for a simple sine wave
-    const numSamples = sampleRate;
-    var data = try allocator.alloc(f32, numSamples);
-    defer allocator.free(data);
-    for (0..numSamples) |i| {
-        data[i] = amplitude * @sin(2 * std.math.pi * frequency * @as(f32, @floatFromInt(i)) / sampleRate);
-    }
-
     var open = true;
     while (open) {
         // Emulator cycle
@@ -213,12 +228,10 @@ pub fn main() !void {
                 cpu.delay_timer -= 1;
             }
             if (cpu.sound_timer > 0) {
-                std.debug.print("ARE WE HERE??\n", .{});
-                _ = c.SDL_QueueAudio(dev, data.ptr, numSamples * @sizeOf(f32));
-                c.SDL_PauseAudioDevice(dev, 0);
                 cpu.sound_timer -= 1;
+                // c.SDL_PauseAudioDevice(dev, 0);
             } else {
-                c.SDL_PauseAudioDevice(dev, 1);
+                // c.SDL_PauseAudioDevice(dev, 1);
             }
         }
 
