@@ -3,13 +3,10 @@ const c = @import("c.zig");
 const process = std.process;
 const Chip8 = @import("chip8.zig");
 
+// Window
 var window: ?*c.SDL_Window = null;
 var renderer: ?*c.SDL_Renderer = null;
 var texture: ?*c.SDL_Texture = null;
-
-// FPS
-const fps: f32 = 60.0;
-const fps_interval = 1000.0 / fps;
 
 // AUDIO
 var want: c.SDL_AudioSpec = undefined;
@@ -51,6 +48,7 @@ pub fn init() !void {
         @panic("Failed to create window.");
     }
 
+    // Renderer setup
     renderer = c.SDL_CreateRenderer(window, -1, 0);
     if (renderer == null) {
         @panic("Failed to create renderer.");
@@ -81,6 +79,8 @@ pub fn init() !void {
         std.debug.print("Failed to open audio: {s}\n", .{c.SDL_GetError()});
         std.process.exit(0);
     }
+
+    std.debug.print("ALL SYSTEMS ARE INITIALIZED!", .{});
 }
 
 pub fn deinit() void {
@@ -151,13 +151,11 @@ pub fn main() !void {
 
     var previous_time = std.time.milliTimestamp();
     const cycle_delay = 10;
-    _ = fps_interval;
 
     // Generate samples for a simple sine wave
-    const numSamples = sampleRate;
-    var data = try allocator.alloc(f32, numSamples);
+    var data = try allocator.alloc(f32, sampleRate);
     defer allocator.free(data);
-    for (0..numSamples) |i| {
+    for (0..sampleRate) |i| {
         data[i] = amplitude * @sin(2 * std.math.pi * frequency * @as(f32, @floatFromInt(i)) / sampleRate);
     }
 
@@ -173,7 +171,7 @@ pub fn main() !void {
             // Rendering
             _ = c.SDL_RenderClear(renderer);
 
-            // TODO: Build Texture
+            // Build Texture
             buildTexture(cpu);
 
             var dest = c.SDL_Rect{ .x = 0, .y = 0, .w = 1024, .h = 512 };
@@ -214,7 +212,7 @@ pub fn main() !void {
             }
             if (cpu.sound_timer > 0) {
                 std.debug.print("ARE WE HERE??\n", .{});
-                _ = c.SDL_QueueAudio(dev, data.ptr, numSamples * @sizeOf(f32));
+                _ = c.SDL_QueueAudio(dev, data.ptr, sampleRate * @sizeOf(f32));
                 c.SDL_PauseAudioDevice(dev, 0);
                 cpu.sound_timer -= 1;
             } else {
@@ -222,6 +220,6 @@ pub fn main() !void {
             }
         }
 
-        std.time.sleep(20000);
+        std.time.sleep(200000);
     }
 }
