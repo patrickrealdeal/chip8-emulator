@@ -1,7 +1,7 @@
 const std = @import("std");
 const c = @import("c.zig");
-const process = std.process;
 const Chip8 = @import("chip8.zig");
+const process = std.process;
 
 // Window
 var window: ?*c.SDL_Window = null;
@@ -9,12 +9,13 @@ var renderer: ?*c.SDL_Renderer = null;
 var texture: ?*c.SDL_Texture = null;
 
 // AUDIO
-var want: c.SDL_AudioSpec = undefined;
-var have: c.SDL_AudioSpec = undefined;
-var dev: c.SDL_AudioDeviceID = undefined;
 const amplitude = 0.5;
 const frequency = 440;
 const sampleRate = 44100;
+
+var want: c.SDL_AudioSpec = undefined;
+var have: c.SDL_AudioSpec = undefined;
+var dev: c.SDL_AudioDeviceID = undefined;
 
 var cpu: *Chip8 = undefined;
 
@@ -38,12 +39,12 @@ const keymap: [16]c_int = [_]c_int{
 };
 
 pub fn init() !void {
-    if (c.SDL_Init(1) < 0) {
+    if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
         @panic("Failed to initialize SDL.");
     }
 
     // Window setup
-    window = c.SDL_CreateWindow("CHIP8-EMULATOR", c.SDL_WINDOWPOS_CENTERED, c.SDL_WINDOWPOS_CENTERED, 1024, 512, 0);
+    window = c.SDL_CreateWindow("CHIP8 EMULATOR", c.SDL_WINDOWPOS_CENTERED, c.SDL_WINDOWPOS_CENTERED, 1024, 512, 0);
     if (window == null) {
         @panic("Failed to create window.");
     }
@@ -80,7 +81,7 @@ pub fn init() !void {
         std.process.exit(0);
     }
 
-    std.debug.print("ALL SYSTEMS ARE INITIALIZED!", .{});
+    std.debug.print("ALL SYSTEMS ARE INITIALIZED!\n", .{});
 }
 
 pub fn deinit() void {
@@ -219,6 +220,6 @@ pub fn main() !void {
             }
         }
 
-        std.time.sleep(200000);
+        std.time.sleep(20000);
     }
 }

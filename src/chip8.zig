@@ -61,9 +61,9 @@ fn incrementPc(self: *Self) void {
 }
 
 pub fn cycle(self: *Self) !void {
-    if (self.program_counter > 0xFFF)
+    if (self.program_counter > 0xFFF) {
         @panic("OPcode out of range!");
-
+    }
     self.opcode = @as(u16, @intCast(self.memory[self.program_counter])) << 8 | self.memory[self.program_counter + 1];
     const Vx = (self.opcode & 0x0F00) >> 8;
     const Vy = (self.opcode & 0x00F0) >> 4;
