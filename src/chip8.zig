@@ -1,6 +1,4 @@
 const std = @import("std");
-const cstd = @cImport(@cInclude("stdlib.h"));
-const time = @cImport(@cInclude("time.h"));
 
 const Self = @This();
 
@@ -36,7 +34,6 @@ const chip8_fontset = [_]u8{
 };
 
 pub fn init(self: *Self) !void {
-    cstd.srand(@intCast(time.time(0))); // seed
     self.program_counter = 0x200; // start of our memory
     self.opcode = 0x00;
     self.index = 0x00;
@@ -60,6 +57,17 @@ fn incrementPc(self: *Self) void {
     self.program_counter += 2; // intructions are 2 bytes
 }
 
+fn random_u32() !u32 {
+    var prng = std.rand.DefaultPrng.init(blk: {
+        var seed: u64 = undefined;
+        try std.posix.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+
+    const rand = prng.random();
+    return rand.int(u32);
+}
+
 pub fn cycle(self: *Self) !void {
     if (self.program_counter > 0xFFF) {
         @panic("OPcode out of range!");
@@ -67,6 +75,8 @@ pub fn cycle(self: *Self) !void {
     self.opcode = @as(u16, @intCast(self.memory[self.program_counter])) << 8 | self.memory[self.program_counter + 1];
     const Vx = (self.opcode & 0x0F00) >> 8;
     const Vy = (self.opcode & 0x00F0) >> 4;
+
+    std.debug.print("{x}\n", .{self.opcode});
 
     switch (self.opcode & 0xF000) {
         0x0000 => {
@@ -188,39 +198,34 @@ pub fn cycle(self: *Self) !void {
         }, // Jump to location nnn + V0.
         0xC000 => {
             const kk = self.opcode & 0x00FF;
-            self.registers[Vx] = @as(u8, @truncate(@as(u32, @bitCast(cstd.rand())) & kk));
+            const random = try random_u32();
+            self.registers[Vx] = @as(u8, @truncate(@as(u32, random) & kk));
             self.incrementPc();
         }, // Set Vx = random byte AND kk.
         0xD000 => {
             self.registers[0xF] = 0;
-            const height = (self.opcode & 0xF);
+            const height = (self.opcode & 0x000F);
             const regx = self.registers[Vx];
             const regy = self.registers[Vy];
 
             var y: usize = 0;
             while (y < height) : (y += 1) {
-                var pixel = self.memory[self.index + y];
+                const pixel = self.memory[self.index + y];
                 var x: usize = 0;
                 while (x < 8) : (x += 1) {
                     const msb: u8 = 0x80;
-                    const tx = (regx + x) % 64;
-                    const ty = (regy + y) % 32;
+                    if (pixel & (msb >> @as(u3, @truncate(x))) != 0) {
+                        const tx = (regx + x) % 64;
+                        const ty = (regy + y) % 32;
+                        const idx = tx + ty * 64;
 
-                    if (tx < 64 and ty < 32) {
-                        // check if bit is set if it is xor them to render
-                        if (pixel & (msb >> @as(u3, @intCast(x))) != 0) {
-                            const idx: u16 = @as(u16, @intCast(tx)) + @as(u16, @intCast(ty)) * 64;
-                            if (tx >= 64 or ty >= 32) continue;
+                        self.graphics[idx] ^= 1;
 
-                            self.graphics[idx] ^= 1;
-
-                            if (self.graphics[idx] == 0) {
-                                self.registers[0xF] = 1;
-                            }
+                        if (self.graphics[idx] == 0) {
+                            self.registers[0xF] = 1;
                         }
                     }
                 }
-                pixel <<= 1;
             }
             self.incrementPc();
         }, // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
