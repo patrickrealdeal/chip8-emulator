@@ -73,15 +73,14 @@ pub fn cycle(self: *Self) !void {
             switch (self.opcode) {
                 0x00E0 => { // clear screen
                     self.graphics = std.mem.zeroes([64 * 32]u8);
-                    self.incrementPc();
                 },
                 0x00EE => { // Return
                     self.sp -= 1;
                     self.program_counter = self.stack[self.sp];
-                    self.incrementPc();
                 },
                 else => {},
             }
+            self.incrementPc();
         },
         0x1000 => {
             const address = self.opcode & 0x0FFF;
@@ -116,41 +115,55 @@ pub fn cycle(self: *Self) !void {
             self.incrementPc();
         }, // Set Vx = kk.
         0x7000 => {
-            @setRuntimeSafety(false);
-            self.registers[Vx] += @truncate(self.opcode & 0x00FF);
+            self.registers[Vx] +%= @truncate(self.opcode & 0xFF);
             self.incrementPc();
         }, // Set Vx = Vx + kk.
         0x8000 => {
             switch (self.opcode & 0x000F) {
                 0x0 => self.registers[Vx] = self.registers[Vy],
-                0x1 => self.registers[Vx] |= self.registers[Vy],
-                0x2 => self.registers[Vx] &= self.registers[Vy],
-                0x3 => self.registers[Vx] ^= self.registers[Vy], // xor
+                0x1 => {
+                    self.registers[Vx] |= self.registers[Vy];
+                    self.registers[0xF] = 0;
+                },
+                0x2 => {
+                    self.registers[Vx] &= self.registers[Vy];
+                    self.registers[0xF] = 0;
+                },
+                0x3 => {
+                    self.registers[Vx] ^= self.registers[Vy];
+                    self.registers[0xF] = 0;
+                }, // xor
                 0x4 => {
-                    // @setRuntimeSafety(false);
-                    var sum: u16 = self.registers[Vx];
-                    sum += self.registers[Vy];
+                    const sum: u32 = @as(u32, @intCast(self.registers[Vx])) + @as(u32, @intCast(self.registers[Vy]));
+                    self.registers[Vx] = @as(u8, @truncate(sum));
 
-                    self.registers[0xF] = if (sum > 255) 1 else 0; // Set flag to overflow (carry)
-                    self.registers[Vx] = @truncate(sum & 0x00FF); // keep only lowest 8 bits
+                    self.registers[0xF] = if (sum > 0xFF) 1 else 0; // Set flag to overflow (carry)
                 }, // Set Vx = Vx + Vy, set VF = carry.
                 0x5 => {
-                    // @setRuntimeSafety(false);
-                    self.registers[0xF] = if (self.registers[Vx] > self.registers[Vy]) 1 else 0;
-                    self.registers[Vx] -= self.registers[Vy];
+                    const vX = self.registers[Vx];
+                    const vY = self.registers[Vy];
+
+                    self.registers[0xF] = 1;
+                    self.registers[Vx] = vX -% vY;
+                    self.registers[0xF] = if (vX >= vY) 1 else 0;
                 }, // Set Vx = Vx - Vy, set VF = NOT borrow.
                 0x6 => {
-                    self.registers[0xF] = (self.registers[Vx] & 0x1); // check least sig bit == 1
-                    self.registers[Vx] >>= 1; // division by 2
+                    const vY = self.registers[Vy];
+                    self.registers[Vx] = vY >> 1; // division by 2
+                    self.registers[0xF] = if (vY & 0x01 != 0) 1 else 0;
                 }, // Set Vx = Vx SHR 1.
                 0x7 => {
-                    // @setRuntimeSafety(false);
-                    self.registers[0xF] = if (self.registers[Vy] > self.registers[Vx]) 1 else 0;
-                    self.registers[Vx] = self.registers[Vy] - self.registers[Vx];
+                    const vX = self.registers[Vx];
+                    const vY = self.registers[Vy];
+
+                    self.registers[0xF] = 1;
+                    self.registers[Vx] = vY -% vX;
+                    self.registers[0xF] = if (vY >= vX) 1 else 0;
                 }, // Set Vx = Vy - Vx, set VF = NOT borrow.
                 0xE => {
-                    self.registers[0xF] = if (self.registers[Vx] & 0x80 != 0) 1 else 0; // check most sig bit is 1
-                    self.registers[Vx] <<= 1; // mult by 2
+                    const vY = self.registers[Vy];
+                    self.registers[Vx] = vY << 1; // mult by 2
+                    self.registers[0xF] = if (vY & 0x80 != 0) 1 else 0; // check most sig bit is 1
                 }, // Set Vx = Vx SHL 1.
                 else => {
                     std.debug.print("CURRENT ALU OP: {x}\n", .{self.opcode});
@@ -180,30 +193,34 @@ pub fn cycle(self: *Self) !void {
         }, // Set Vx = random byte AND kk.
         0xD000 => {
             self.registers[0xF] = 0;
-            const height = (self.opcode & 0x000F);
+            const height = (self.opcode & 0xF);
             const regx = self.registers[Vx];
             const regy = self.registers[Vy];
 
             var y: usize = 0;
             while (y < height) : (y += 1) {
-                const pixel = self.memory[self.index + y];
+                var pixel = self.memory[self.index + y];
                 var x: usize = 0;
                 while (x < 8) : (x += 1) {
                     const msb: u8 = 0x80;
+                    const tx = (regx + x) % 64;
+                    const ty = (regy + y) % 32;
 
-                    // check if bit is set if it is xor them to render
-                    if (pixel & (msb >> @as(u3, @intCast(x))) != 0) {
-                        const tx = (regx + x) % 64;
-                        const ty = (regy + y) % 32;
-                        const idx = tx + ty * 64;
+                    if (tx < 64 and ty < 32) {
+                        // check if bit is set if it is xor them to render
+                        if (pixel & (msb >> @as(u3, @intCast(x))) != 0) {
+                            const idx: u16 = @as(u16, @intCast(tx)) + @as(u16, @intCast(ty)) * 64;
+                            if (tx >= 64 or ty >= 32) continue;
 
-                        self.graphics[idx] ^= 1;
+                            self.graphics[idx] ^= 1;
 
-                        if (self.graphics[idx] == 0) {
-                            self.registers[0x0F] = 1;
+                            if (self.graphics[idx] == 0) {
+                                self.registers[0xF] = 1;
+                            }
                         }
                     }
                 }
+                pixel <<= 1;
             }
             self.incrementPc();
         }, // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
@@ -248,7 +265,6 @@ pub fn cycle(self: *Self) !void {
                     self.sound_timer = self.registers[Vx];
                 },
                 0x1E => {
-                    self.registers[0xF] = if (self.index + self.registers[Vx] > 0xFFF) 1 else 0;
                     self.index += self.registers[Vx];
                 },
                 0x29 => {
@@ -262,16 +278,18 @@ pub fn cycle(self: *Self) !void {
                     self.memory[self.index + 2] = self.registers[Vx] % 10;
                 },
                 0x55 => {
-                    var i: usize = 0;
+                    var i: u16 = 0;
                     while (i <= Vx) : (i += 1) {
                         self.memory[self.index + i] = self.registers[i]; // dump registers into memory
                     }
+                    self.index += i;
                 },
                 0x65 => {
-                    var i: usize = 0;
+                    var i: u16 = 0;
                     while (i <= Vx) : (i += 1) {
                         self.registers[i] = self.memory[self.index + i];
                     }
+                    self.index += i;
                 },
                 else => {},
             }

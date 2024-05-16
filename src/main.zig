@@ -151,7 +151,7 @@ pub fn main() !void {
     defer deinit();
 
     var previous_time = std.time.milliTimestamp();
-    const cycle_delay = 10;
+    const cycle_delay = 2;
 
     // Generate samples for a simple sine wave
     var data = try allocator.alloc(f32, sampleRate);
