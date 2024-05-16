@@ -133,8 +133,9 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     cpu = try allocator.create(Chip8);
-    try cpu.init();
     defer allocator.destroy(cpu);
+
+    try cpu.init();
 
     // Load  Rom
     var args = try process.argsWithAllocator(allocator);
