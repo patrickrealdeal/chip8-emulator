@@ -120,7 +120,7 @@ pub fn buildTexture(system: *Chip8) void {
     while (y < 32) : (y += 1) {
         var x: usize = 0;
         while (x < 64) : (x += 1) {
-            bytes_c[y * 64 + x] = if (system.graphics[y * 64 + x] == 1) 0x3BD6C6FF else 0xB3ECECFF;
+            bytes_c[y * 64 + x] = if (system.graphics[y * 64 + x] == 1) 0xB3ECECFF else 0x3BD6C6FF;
         }
     }
     c.SDL_UnlockTexture(texture);
@@ -151,7 +151,7 @@ pub fn main() !void {
     defer deinit();
 
     var previous_time = std.time.milliTimestamp();
-    const cycle_delay = 2;
+    const cycle_delay = 5;
 
     // Generate samples for a simple sine wave
     var data = try allocator.alloc(f32, sampleRate);
@@ -164,7 +164,8 @@ pub fn main() !void {
     while (open) {
         // Emulator cycle
         const current_time = std.time.milliTimestamp();
-        if (@as(f32, @floatFromInt(current_time - previous_time)) > cycle_delay) {
+        const elapsed_time = current_time - previous_time;
+        if (elapsed_time >= cycle_delay) {
             previous_time = current_time;
 
             try cpu.cycle();
@@ -220,6 +221,9 @@ pub fn main() !void {
             }
         }
 
-        std.time.sleep(20000);
+        const target_time = previous_time + (1000 / 60);
+        if (current_time < target_time) {
+            std.time.sleep(@as(u64, @intCast(target_time - current_time)));
+        }
     }
 }
