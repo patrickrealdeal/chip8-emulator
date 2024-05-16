@@ -76,8 +76,6 @@ pub fn cycle(self: *Self) !void {
     const Vx = (self.opcode & 0x0F00) >> 8;
     const Vy = (self.opcode & 0x00F0) >> 4;
 
-    std.debug.print("{x}\n", .{self.opcode});
-
     switch (self.opcode & 0xF000) {
         0x0000 => {
             switch (self.opcode) {
@@ -214,6 +212,7 @@ pub fn cycle(self: *Self) !void {
                 var x: usize = 0;
                 while (x < 8) : (x += 1) {
                     const msb: u8 = 0x80;
+
                     if (pixel & (msb >> @as(u3, @truncate(x))) != 0) {
                         const tx = (regx + x) % 64;
                         const ty = (regy + y) % 32;
